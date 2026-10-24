@@ -1,0 +1,424 @@
+ChargeSmart Frontend Agent Instructions
+========================================
+
+Objective
+---------
+Build the ChargeSmart frontend as a dashboard for planning an EV journey and selecting a charging station. The frontend must connect to the existing FastAPI backend in this repository. Do not create a second data model, local database, fake live-status service, or hard-coded station catalogue.
+
+Backend development server
+--------------------------
+Run the backend from the backend directory:
+
+    cd /d C:\Users\pc\Desktop\ChargeSmart\backend
+    python -m uvicorn app.main:app --reload
+
+The API is normally available at:
+
+    http://localhost:8000
+
+Interactive API documentation is available at:
+
+    http://localhost:8000/docs
+
+The frontend development origin should normally be:
+
+    http://localhost:5173
+
+The backend already enables CORS for the configured FRONTEND_ORIGIN value. Keep the frontend API base URL configurable, for example:
+
+    VITE_API_BASE_URL=http://localhost:8000
+
+Do not put Open Charge Map, OpenRouteService, Urban Fox, or other provider secrets in the frontend. Those secrets belong only in the backend .env file.
+
+API endpoints
+-------------
+
+GET /api/health
+
+Use this to show backend/provider readiness. A response of "degraded" can still mean that the API is running but one or more external API keys are not configured. Do not treat degraded as a frontend crash.
+
+GET /api/metadata
+
+Use this to populate supported connector types and sort options instead of duplicating them in code. Important values include:
+
+    connector_types: CCS, CHAdeMO, Type 2, Type 1, Tesla, GB/T, Other
+    sort_options: recommended, availability, fastest, cheapest
+
+GET /api/journey/route?origin={origin}&destination={destination}
+
+Returns a real OpenRouteService driving route. Origin and destination may be place names or coordinates in latitude,longitude form, for example:
+
+    /api/journey/route?origin=51.5074,-0.1278&destination=51.4545,-2.5879
+
+Response fields:
+
+    origin: { latitude, longitude }
+    destination: { latitude, longitude }
+    distance_km
+    duration_minutes
+    distance_label
+    duration_label
+    geometry: GeoJSON geometry, normally a LineString
+    generated_at: ISO 8601 timestamp
+
+GeoJSON coordinates use [longitude, latitude] order. This is the standard order for Leaflet GeoJSON rendering. Do not reverse the coordinates when rendering the route.
+
+GET /api/journey/recommendations
+
+This is the primary dashboard endpoint. Required query parameters:
+
+    origin
+    destination
+
+Optional query parameters:
+
+    connector=CCS,Type%202
+    min_power_kw=50
+    max_detour_minutes=20
+    sort_by=recommended|availability|fastest|cheapest
+    limit=10
+
+Example:
+
+    /api/journey/recommendations?origin=51.5074,-0.1278&destination=51.4545,-2.5879&connector=CCS&min_power_kw=50&max_detour_minutes=20&sort_by=recommended&limit=10
+
+Response structure:
+
+    {
+      "journey": { ... },
+      "filters": { ... },
+      "summary": { ... },
+      "recommended_stations": [ ... ],
+      "map": { ... },
+      "data_quality": { ... }
+    }
+
+Use the response as the single source of truth for the journey summary, map, station list, ranks, and selected-station panel. Do not independently recalculate or reorder stations in the frontend.
+
+Journey fields
+--------------
+
+journey contains:
+
+    origin
+    destination
+    origin_coordinates
+    destination_coordinates
+    route_distance_km
+    distance_label
+    estimated_driving_duration_minutes
+    duration_label
+    route_geometry
+    currency
+    generated_at
+
+Use distance_label and duration_label for the primary display. Keep the numeric values available for accessibility, sorting labels, or secondary detail views.
+
+Filters and summary
+-------------------
+
+filters echoes the active request:
+
+    connector: array of connector names
+    min_power_kw
+    max_detour_minutes
+    sort_by
+    limit
+
+summary contains:
+
+    stations_found
+    stations_matching_filters
+    best_station_id
+
+When best_station_id is null or recommended_stations is empty, show a clear no-match state. Do not invent a recommendation.
+
+Canonical station object
+------------------------
+
+Every station from recommended_stations and /api/chargers/{station_id} uses the same schema. Use station_id as the stable key everywhere: list rows, map markers, selected station state, and detail requests.
+
+Identity and location:
+
+    station_id
+    name
+    operator
+    address: line_1, line_2, city, state_or_province, postcode, country, formatted
+    location: { latitude, longitude }
+
+Connectors:
+
+    connectors: array of
+      connector_id
+      type
+      power_kw
+      status
+      quantity
+      available_count
+      total_count
+    power_kw_max
+
+Do not infer availability from quantity, total_count, or the existence of a connector. A connector can be physically listed while its live status is unknown.
+
+Pricing:
+
+    pricing.currency
+    pricing.price_per_kwh
+    pricing.unit
+    pricing.source
+    pricing.last_updated
+
+If price_per_kwh is null or data_quality.price_is_verified is false, display "Price unavailable" or "Price not verified". Never display a guessed price, zero price, or a universal rate.
+
+Availability:
+
+    availability.status: available, occupied, unavailable, or unknown
+    availability.available_connectors
+    availability.total_connectors
+    availability.observed_at
+    availability.source
+    availability.is_stale
+    availability.source_status
+
+Only present live-status UI treatments when status is not unknown and is_stale is false. When status is unknown, use neutral styling and explain that live availability is unavailable. A current available status is not a guarantee that a connector will be free on arrival.
+
+Route-specific fields:
+
+    route.detour_minutes
+    route.detour_distance_km
+    route.minutes_from_origin
+    route.method
+
+These values are based on actual driving routes. Do not label them as straight-line distance. If a value is null, display "Detour unavailable" rather than zero.
+
+Prediction fields:
+
+    prediction.probability_available_on_arrival
+    prediction.confidence
+    prediction.estimated_arrival_at
+    prediction.expected_wait_minutes
+    prediction.model_version
+    prediction.prediction_basis
+    prediction.generated_at
+    prediction.underlying_observation_at
+
+The current MVP intentionally returns null for probability and expected wait because no permitted historical or forecasting source is configured. The frontend must support this state:
+
+    probability null -> "Availability prediction unavailable"
+    expected_wait_minutes null -> "Wait estimate unavailable"
+
+Do not render null as 0%, 0 minutes, "certain", or "instant". Only render a percentage when probability_available_on_arrival is a real number between 0 and 1. Convert it to a percentage only for display, for example Math.round(value * 100).
+
+Recommendation fields:
+
+    recommendation.rank
+    recommendation.score
+    recommendation.reasons
+
+Use rank from the backend. Display recommendation.reasons as evidence-based explanation chips or a short explanation. The score is normalized from 0 to 1 and is not a confidence percentage.
+
+Access and quality:
+
+    amenities
+    access.is_public
+    access.opening_hours
+    access.access_notes
+    data_quality.availability_is_live
+    data_quality.price_is_verified
+    data_quality.last_updated
+    data_quality.warnings
+
+Do not display unsupported access, opening-hour, or amenity information as fact. If a value is null, omit it or use a neutral "Not provided" label.
+
+Map integration
+---------------
+
+The recommendations response contains:
+
+    map.bounds
+    map.origin_marker
+    map.destination_marker
+    map.station_markers
+
+Each station marker contains:
+
+    station_id
+    location
+    rank
+    availability_status
+    probability_available_on_arrival
+
+Render journey.route_geometry as a Leaflet GeoJSON layer. Render origin and destination using the corresponding journey coordinates. Render station markers from map.station_markers and resolve the clicked station object from recommended_stations using station_id.
+
+Use map.bounds to fit the map after a successful recommendation request. Do not generate map bounds from guessed coordinates. Keep map, list, and selected detail synchronized by station_id.
+
+Recommended frontend state
+---------------------------
+
+Use a state shape similar to:
+
+    {
+      originInput: string,
+      destinationInput: string,
+      connector: string[],
+      minPowerKw: number | null,
+      maxDetourMinutes: number,
+      sortBy: string,
+      limit: number,
+      journeyResponse: RecommendationsResponse | null,
+      selectedStationId: string | null,
+      selectedStation: Station | null,
+      loading: boolean,
+      error: string | null
+    }
+
+On form submit:
+
+1. Validate that origin and destination are non-empty.
+2. Serialize connector values as a comma-separated query parameter.
+3. Call /api/journey/recommendations.
+4. Replace journey, station, map, filter, and quality state from the response.
+5. Select best_station_id when present, or leave the detail panel empty when there is no match.
+6. Fit the map to response.map.bounds.
+
+On station marker/list selection:
+
+1. Set selectedStationId immediately for responsive UI.
+2. Call GET /api/chargers/{station_id} for the full station object.
+3. Include origin and destination in the detail request when route-specific detail is needed.
+4. Replace the detail panel with the returned canonical station object.
+5. Do not create a separate incompatible station shape for the detail panel.
+
+Detail request example:
+
+    /api/chargers/ocm:12345?origin=51.5074,-0.1278&destination=51.4545,-2.5879&connector=CCS
+
+The station ID contains a colon in the current Open Charge Map format. Use URL encoding when building URLs if required by the frontend HTTP client.
+
+GET /api/chargers
+
+Use this only for a geographic station browser or map discovery view. Supply either:
+
+    latitude, longitude, radius_km
+
+or:
+
+    bbox
+
+Do not send both forms at once. The endpoint supports limit and offset. It returns station objects under stations and identifies Open Charge Map as the source.
+
+GET /api/chargers/{station_id}/history
+
+This currently returns an explicit unavailable response:
+
+    available: false
+    observations: []
+    warnings: [...]
+
+Render a helpful unavailable state. Do not render an empty chart that implies no historical events occurred.
+
+Error handling
+--------------
+
+Handle these statuses explicitly:
+
+    400 invalid query, connector, or location input
+    404 station not found
+    502 external provider failure, timeout, rate limit, or malformed response
+    503 missing provider configuration or unavailable required functionality
+
+The backend returns a safe detail message and may include warnings. Never display raw stack traces or provider response bodies. Keep the last successful response visible when a refresh fails, but show a visible stale/error banner so the user knows it was not refreshed.
+
+Recommended UI copy:
+
+    400: "Check the origin, destination, and filters."
+    404: "This charging station could not be found."
+    502: "A live data provider is temporarily unavailable."
+    503: "This feature needs backend provider configuration."
+
+Loading and empty states
+------------------------
+
+Show loading state while recommendations are being fetched. Disable duplicate submits or cancel the previous request when a newer request starts. Abort stale requests where the frontend framework supports AbortController.
+
+Show an empty result state when:
+
+    recommended_stations.length === 0
+
+Explain that no station matched the active connector, power, or detour filters. Offer to relax filters. Do not insert demo stations into the result.
+
+Data-quality presentation
+-------------------------
+
+The response data_quality object contains:
+
+    freshness
+    prediction_method
+    source_availability
+    warnings
+
+Show a compact data-quality notice near the results. Surface warnings that affect interpretation, especially:
+
+    no live availability source
+    no verified price
+    arrival prediction unavailable
+    stale live data
+
+Distinguish these states visually:
+
+    verified/live data
+    provider data with a timestamp but stale status
+    metadata only
+    unavailable data
+
+Do not use green availability badges or high-confidence language for unknown data.
+
+Formatting rules
+----------------
+
+- Treat all timestamps as ISO 8601 and format them in the user's local timezone with a UTC or local-time indicator.
+- Keep numeric distance in kilometres, duration in minutes, power in kW, and price in the provider's stated currency per kWh.
+- Do not silently convert currency. The journey response supplies a display currency, while station pricing preserves the provider currency.
+- Use null-aware rendering throughout the application.
+- Keep station IDs as strings; do not parse them as integers because provider prefixes are part of the stable ID.
+
+API helper example
+------------------
+
+Use one API helper so all requests share error handling and the configurable base URL:
+
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+
+    async function apiGet(path) {
+      const response = await fetch(`${API_BASE_URL}${path}`);
+      let body = null;
+      try { body = await response.json(); } catch (_) {}
+      if (!response.ok) {
+        const error = new Error(body?.detail ?? "Request failed");
+        error.status = response.status;
+        error.warnings = body?.warnings ?? [];
+        throw error;
+      }
+      return body;
+    }
+
+When constructing query parameters, use URLSearchParams rather than string concatenation so place names and connector names are correctly encoded.
+
+Do not use demo data in production
+----------------------------------
+
+The backend deliberately returns unknown/null fields when external sources do not support live occupancy, verified price, historical availability, or prediction. The frontend may use a clearly labeled design-time fixture only in Storybook or isolated visual tests. Never merge fixture data into a live API response or label it as real station data.
+
+Completion checklist
+--------------------
+
+- The frontend starts with the documented backend command and configurable API base URL.
+- Origin/destination and filters produce a request to /api/journey/recommendations.
+- Real GeoJSON route geometry renders with correct [longitude, latitude] order.
+- Station list, map markers, and detail panel use the same station_id.
+- Connector and minimum-power filters are submitted to the backend.
+- Backend rank, score, reasons, detour, and power are displayed without recomputing them.
+- Unknown/null availability, price, prediction, wait, hours, and amenities are rendered honestly.
+- All API error statuses have user-readable states.
+- No provider API key is present in frontend source or environment variables.
+- Tests cover loading, empty results, unknown data, provider errors, marker selection, and detail loading.
