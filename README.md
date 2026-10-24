@@ -61,3 +61,9 @@ Tests use local fixtures and provider-shaped payloads only; they do not call pro
 ## Sources and attribution
 
 Production deployments should show Open Charge Map attribution as required by its terms and respect provider rate limits. Provider documentation used by this implementation: [Open Charge Map API](https://openchargemap.org/develop/api), [OpenRouteService API](https://openrouteservice.org/dev/), and [Urban Fox public chargepoint data access](https://urbanfox.network/public-charge-point-regulations-data-access/).
+
+## ChargeSmart frontend
+
+The Next.js dashboard is in [`frontend/`](frontend/README.md). From that directory, run `npm install` and `npm run dev`, then open http://localhost:5173. Start the existing FastAPI backend separately on port 8000. See the frontend README for environment configuration, data limits, and verification commands.
+
+The dashboard uses backend metadata, recommendations, routes, and station details. Added backend support includes location autocomplete, one intermediate route stop via the optional `via` query parameter, and shortest-detour sorting. Provider credentials remain on the backend.

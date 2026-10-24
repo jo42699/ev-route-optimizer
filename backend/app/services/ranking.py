@@ -4,7 +4,7 @@ from app.models import Recommendation, SortBy, Station
 def _compatibility(station: Station, connectors: list[str], min_power_kw: float | None) -> bool:
     wanted = {item.casefold() for item in connectors}
     connector_match = not wanted or any(item.type.casefold() in wanted for item in station.connectors)
-    power_match = min_power_kw is None or (station.power_kw_max is not None and station.power_kw_max >= min_power_kw)
+    power_match = min_power_kw is None or any((not wanted or item.type.casefold() in wanted) and item.power_kw is not None and item.power_kw >= min_power_kw for item in station.connectors)
     return connector_match and power_match
 
 
@@ -47,8 +47,8 @@ def rank_stations(stations: list[Station], sort_by: SortBy) -> list[Station]:
     if sort_by == SortBy.AVAILABILITY:
         scored.sort(key=lambda item: (item[0].prediction.probability_available_on_arrival is not None,
                                       item[0].prediction.probability_available_on_arrival or -1), reverse=True)
-    elif sort_by == SortBy.FASTEST:
-        scored.sort(key=lambda item: (item[0].route.detour_minutes is None, item[0].route.detour_minutes or float("inf")))
+    elif sort_by in (SortBy.FASTEST, SortBy.DETOUR):
+        scored.sort(key=lambda item: (item[0].route.detour_minutes is None, item[0].route.detour_minutes if item[0].route.detour_minutes is not None else float("inf")))
     elif sort_by == SortBy.CHEAPEST:
         scored.sort(key=lambda item: (not item[0].data_quality.price_is_verified,
                                       item[0].pricing.price_per_kwh if item[0].pricing.price_per_kwh is not None else float("inf")))

@@ -56,9 +56,21 @@ async def health(settings: Settings = Depends(get_settings)):
 
 @router.get("/journey/route", response_model=RouteResponse)
 async def route(origin: Annotated[str, Query(min_length=1)], destination: Annotated[str, Query(min_length=1)],
+                via: str | None = None,
                 client: httpx.AsyncClient = Depends(get_client), settings: Settings = Depends(get_settings)):
     try:
-        journey, _ = await service(client, settings).route(origin, destination)
+        journey_service = service(client, settings)
+        journey, _ = await journey_service.route(origin, destination)
+        if via:
+            from app.services.locations import resolve_location
+            stop = await resolve_location(via, journey_service.ors)
+            raw = await journey_service.ors.route([journey.origin_coordinates, stop, journey.destination_coordinates])
+            journey.route_geometry = raw["geometry"]
+            journey.route_distance_km = raw["distance_km"]
+            journey.estimated_driving_duration_minutes = raw["duration_minutes"]
+            from app.services.journey import distance_label, duration_label
+            journey.distance_label = distance_label(raw["distance_km"])
+            journey.duration_label = duration_label(raw["duration_minutes"])
     except ChargeSmartError as exc:
         raise HTTPException(exc.status_code, exc.message) from exc
     return RouteResponse(origin=journey.origin_coordinates, destination=journey.destination_coordinates,
@@ -163,3 +175,12 @@ async def metadata():
                             data_sources={"openchargemap": {"metadata": True, "live_availability": False, "pricing": False},
                                           "openrouteservice": {"routing": True, "geocoding": True},
                                           "urbanfox": {"live_availability": "optional_configured", "pricing": "optional_configured", "history": False}})
+
+
+@router.get("/locations/autocomplete")
+async def autocomplete(text: Annotated[str, Query(min_length=3, max_length=200)],
+                       client: httpx.AsyncClient = Depends(get_client), settings: Settings = Depends(get_settings)):
+    try:
+        return {"suggestions": await service(client, settings).ors.autocomplete(text)}
+    except ChargeSmartError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc

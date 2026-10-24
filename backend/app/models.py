@@ -27,6 +27,7 @@ class SortBy(str, Enum):
     AVAILABILITY = "availability"
     FASTEST = "fastest"
     CHEAPEST = "cheapest"
+    DETOUR = "detour"
 
 
 class Coordinate(BaseModel):

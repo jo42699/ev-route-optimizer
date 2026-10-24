@@ -1,0 +1,156 @@
+{
+  "journey": {
+    "origin": "Oxford, UK",
+    "destination": "London, UK",
+    "origin_coordinates": {
+      "latitude": 51.75,
+      "longitude": -1.25
+    },
+    "destination_coordinates": {
+      "latitude": 51.5,
+      "longitude": -0.1
+    },
+    "route_distance_km": 90.0,
+    "distance_label": "90 km",
+    "estimated_driving_duration_minutes": 70.0,
+    "duration_label": "1 hr 10 min",
+    "route_geometry": {
+      "type": "LineString",
+      "coordinates": [
+        [
+          -1.25,
+          51.75
+        ],
+        [
+          -0.1,
+          51.5
+        ]
+      ]
+    },
+    "currency": "GBP",
+    "generated_at": "2026-10-24T13:38:21.437227Z"
+  },
+  "filters": {
+    "connector": [],
+    "min_power_kw": 50.0,
+    "max_detour_minutes": 20.0,
+    "sort_by": "recommended",
+    "limit": 10
+  },
+  "summary": {
+    "stations_found": 1,
+    "stations_matching_filters": 1,
+    "best_station_id": "ocm:123"
+  },
+  "recommended_stations": [
+    {
+      "station_id": "ocm:123",
+      "name": "Test station",
+      "operator": null,
+      "address": {
+        "line_1": null,
+        "line_2": null,
+        "city": null,
+        "state_or_province": null,
+        "postcode": null,
+        "country": null,
+        "formatted": null
+      },
+      "location": {
+        "latitude": 51.7,
+        "longitude": -1.0
+      },
+      "connectors": [],
+      "power_kw_max": null,
+      "pricing": {
+        "currency": null,
+        "price_per_kwh": null,
+        "unit": null,
+        "source": null,
+        "last_updated": null
+      },
+      "availability": {
+        "status": "unknown",
+        "available_connectors": null,
+        "total_connectors": null,
+        "observed_at": null,
+        "source": null,
+        "is_stale": true,
+        "source_status": null
+      },
+      "route": {
+        "detour_minutes": null,
+        "detour_distance_km": null,
+        "minutes_from_origin": null,
+        "method": null
+      },
+      "prediction": {
+        "probability_available_on_arrival": null,
+        "confidence": null,
+        "estimated_arrival_at": null,
+        "expected_wait_minutes": null,
+        "model_version": null,
+        "prediction_basis": null,
+        "generated_at": null,
+        "underlying_observation_at": null
+      },
+      "recommendation": {
+        "rank": 1,
+        "score": 0.1,
+        "reasons": [
+          "low verified route detour"
+        ]
+      },
+      "amenities": null,
+      "access": {
+        "is_public": null,
+        "opening_hours": null,
+        "access_notes": null
+      },
+      "data_quality": {
+        "availability_is_live": false,
+        "price_is_verified": false,
+        "last_updated": null,
+        "warnings": []
+      }
+    }
+  ],
+  "map": {
+    "bounds": [
+      [
+        51.5,
+        -1.25
+      ],
+      [
+        51.75,
+        -0.1
+      ]
+    ],
+    "origin_marker": {
+      "latitude": 51.75,
+      "longitude": -1.25
+    },
+    "destination_marker": {
+      "latitude": 51.5,
+      "longitude": -0.1
+    },
+    "station_markers": [
+      {
+        "station_id": "ocm:123",
+        "location": {
+          "latitude": 51.7,
+          "longitude": -1.0
+        },
+        "rank": 1,
+        "availability_status": "unknown",
+        "probability_available_on_arrival": null
+      }
+    ]
+  },
+  "data_quality": {
+    "freshness": "Test fixture only",
+    "prediction_method": "unavailable",
+    "source_availability": {},
+    "warnings": []
+  }
+}

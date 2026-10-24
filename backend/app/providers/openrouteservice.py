@@ -33,6 +33,20 @@ class OpenRouteServiceProvider:
             raise ProviderUnavailableError("The geocoding provider returned no coordinates")
         return Coordinate(latitude=float(coords[1]), longitude=float(coords[0]))
 
+    async def autocomplete(self, text: str) -> list[dict[str, Any]]:
+        if not self.configured:
+            raise ProviderNotConfiguredError("Place suggestions need OpenRouteService configuration")
+        data = await request_json(self.client, "GET", f"{self.settings.openrouteservice_base_url.rstrip('/')}/geocode/autocomplete",
+                                  params={"api_key": self.settings.openrouteservice_api_key, "text": text, "size": 5})
+        results = []
+        for feature in data.get("features", []):
+            coords = feature.get("geometry", {}).get("coordinates", [])
+            label = feature.get("properties", {}).get("label")
+            if label and len(coords) >= 2:
+                point = Coordinate(latitude=coords[1], longitude=coords[0])
+                results.append({"label": label, "location": point.model_dump()})
+        return results
+
     async def route(self, coordinates: list[Coordinate]) -> dict[str, Any]:
         if not self.configured:
             raise ProviderNotConfiguredError("OPENROUTESERVICE_API_KEY is not configured for routing")

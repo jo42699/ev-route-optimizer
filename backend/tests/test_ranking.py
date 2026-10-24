@@ -17,3 +17,16 @@ def test_ranking_is_transparent_when_prediction_and_price_are_missing():
     assert result[0].recommendation is not None
     assert result[0].prediction.probability_available_on_arrival is None
     assert any("unverified" in reason for reason in result[0].recommendation.reasons)
+
+
+def test_power_must_be_on_a_compatible_connector():
+    mixed = station("mixed", "CCS", 22)
+    mixed.connectors.append(Connector(type="CHAdeMO", power_kw=150))
+    mixed.power_kw_max = 150
+    assert filter_stations([mixed], ["CCS"], 50, 20) == []
+
+
+def test_zero_detour_sorts_first():
+    for sort in (SortBy.FASTEST, SortBy.DETOUR):
+        result = rank_stations([station("five", detour=5), station("zero", detour=0)], sort)
+        assert result[0].station_id == "zero"
